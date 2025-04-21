@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Traffic Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .status-badge {
+            width: 80px;
+        }
+        .packet-row {
+            cursor: pointer;
+        }
+        .packet-row:hover {
+            background-color: #f8f9fa;
+        }
+        .anomalous {
+            background-color: #ffe6e6;
+        }
+        .normal {
+            background-color: #e6ffe6;
+        }
+        #trafficChart {
+            height: 300px !important;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Network Traffic Analyzer</h1>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Packet Sniffer</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                Status: <span id="sniffer-status" class="badge bg-secondary status-badge">Unknown</span>
+                            </div>
+                            <div>
+                                <button id="start-sniffer" class="btn btn-success">Start</button>
+                                <button id="stop-sniffer" class="btn btn-danger">Stop</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Packet Generator</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                Status: <span id="generator-status" class="badge bg-secondary status-badge">Unknown</span>
+                            </div>
+                            <div>
+                                <button id="start-generator" class="btn btn-success">Start</button>
+                                <button id="stop-generator" class="btn btn-danger">Stop</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Packet Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h3 id="total-packets">0</h3>
+                                <p>Total Packets</p>
+                            </div>
+                            <div class="col-4">
+                                <h3 id="normal-packets">0</h3>
+                                <p>Normal</p>
+                            </div>
+                            <div class="col-4">
+                                <h3 id="anomalous-packets">0</h3>
+                                <p>Anomalous</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Traffic Distribution</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="trafficChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Detected Packets</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Protocol</th>
+                                <th>Flags</th>
+                                <th>Prediction</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packets-table">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let trafficChart;
+
+        function initChart() {
+            const ctx = document.getElementById('trafficChart').getContext('2d');
+            trafficChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Normal', 'Anomalous'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: ['#90EE90', '#FFB6C6'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('sniffer-status').textContent = data.sniffer;
+                    document.getElementById('sniffer-status').className = 
+                        `badge ${data.sniffer === 'running' ? 'bg-success' : 'bg-secondary'} status-badge`;
+                    
+                    document.getElementById('generator-status').textContent = data.generator;
+                    document.getElementById('generator-status').className = 
+                        `badge ${data.generator === 'running' ? 'bg-success' : 'bg-secondary'} status-badge`;
+                });
+        }
+
+        function updateStatistics(packets) {
+            let normalCount = 0;
+            let anomalousCount = 0;
+
+            packets.forEach(packet => {
+                if (packet.prediction.toLowerCase() === 'normal') {
+                    normalCount++;
+                } else {
+                    anomalousCount++;
+                }
+            });
+
+            const totalCount = normalCount + anomalousCount;
+
+            // Update counters
+            document.getElementById('total-packets').textContent = totalCount;
+            document.getElementById('normal-packets').textContent = normalCount;
+            document.getElementById('anomalous-packets').textContent = anomalousCount;
+
+            // Update chart
+            trafficChart.data.datasets[0].data = [normalCount, anomalousCount];
+            trafficChart.update();
+        }
+
+        function updatePackets() {
+            // Get all packets for statistics
+            fetch('/get_packets')
+                .then(response => response.json())
+                .then(allPackets => {
+                    // Update statistics with all packets
+                    updateStatistics(allPackets);
+                    
+                    // Get latest 50 packets for display
+                    fetch('/get_packets?latest=true')
+                        .then(response => response.json())
+                        .then(latestPackets => {
+                            const tbody = document.getElementById('packets-table');
+                            tbody.innerHTML = '';
+                            
+                            latestPackets.forEach(packet => {
+                                const row = document.createElement('tr');
+                                row.className = `packet-row ${packet.prediction.toLowerCase()}`;
+                                
+                                row.innerHTML = `
+                                    <td>${new Date(packet.timestamp).toLocaleTimeString()}</td>
+                                    <td>${packet.src_ip}:${packet.src_port}</td>
+                                    <td>${packet.dst_ip}:${packet.dst_port}</td>
+                                    <td>${packet.protocol}</td>
+                                    <td>${packet.flags}</td>
+                                    <td>${packet.prediction}</td>
+                                    <td>${(parseFloat(packet.confidence) * 100).toFixed(1)}%</td>
+                                `;
+                                
+                                tbody.appendChild(row);
+                            });
+                        });
+                });
+        }
+
+        // Event listeners for buttons
+        document.getElementById('start-sniffer').addEventListener('click', () => {
+            fetch('/start_sniffer')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        });
+
+        document.getElementById('stop-sniffer').addEventListener('click', () => {
+            fetch('/stop_sniffer')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        });
+
+        document.getElementById('start-generator').addEventListener('click', () => {
+            fetch('/start_generator')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        });
+
+        document.getElementById('stop-generator').addEventListener('click', () => {
+            fetch('/stop_generator')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        });
+
+        // Initialize chart when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            updateStatus();
+            updatePackets();
+        });
+
+        // Update status and packets periodically
+        setInterval(updateStatus, 5000);
+        setInterval(updatePackets, 2000);
+    </script>
+</body>
+</html>
