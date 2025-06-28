@@ -27,15 +27,15 @@ The system utilizes the Scapy library for packet manipulation, scikit-learn for 
 ## System Components
 
 ### 1. Packet Generator (`packet_generator.py`)
-- Generates normal and anomalous TCP packets
-- Simulates attack behaviors: IP spoofing, port anomalies, TCP flag manipulation, payload variation
-- Logs all generated packets to `generated_packets.csv`
+- Generates normal and anomalous TCP packets  
+- Simulates attack behaviors: IP spoofing, port anomalies, TCP flag manipulation, payload variation  
+- Logs all generated packets to `generated_packets.csv`  
 
 ### 2. Packet Sniffer (`packet_sniffer.py`)
 - Captures live TCP packets using Scapy  
 - Extracts relevant features for each packet  
 - Applies trained ML model for real-time classification  
-- Logs predictions and confidence scores to `detected_packets.csv`
+- Logs predictions and confidence scores to `detected_packets.csv`  
 
 ### 3. Model Training (`train.py`)
 - Preprocesses KDD Cup dataset with label encoding and class balancing  
@@ -129,6 +129,13 @@ python app.py
 
 - `generated_packets.csv` - All generated packets with labels  
 - `detected_packets.csv` - Live traffic predictions and details  
+
+---
+
+## Authors
+
+- [**Gobi**](https://github.com/Gobi05-exe) – *System Development & Machine Learning Integration*  
+- [**Sathish Kesavan**](https://github.com/sathish-k7) – *Flask Interface & Real-Time Monitoring*  
 
 ---
 
